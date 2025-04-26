@@ -2,6 +2,8 @@
 
 A Python-based Azure CLI assistant that provides natural language processing capabilities for Azure commands, leveraging Azure MCP Server.
 
+![console](console.png)
+
 ## Prerequisites
 
 - Python 3.11+ (as specified in pyproject.toml)

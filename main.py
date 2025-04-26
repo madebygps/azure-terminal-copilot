@@ -83,11 +83,11 @@ class MCPClient:
                 return response.result
                 
             if hasattr(response, 'content') and response.content:
-                print(f"DEBUG: Response has {len(response.content)} content items")
+                
                 
                 for i, content_item in enumerate(response.content):
                     if hasattr(content_item, 'text') and content_item.text:
-                        print(f"DEBUG: Content item {i} has text: {content_item.text[:50]}...")
+                     
                         
                         if content_item.text == "null":
                             return []
@@ -121,32 +121,43 @@ class MCPClient:
             command_list = "\n".join([f"- {cmd}" for cmd in available_commands])
                 
             system_prompt = f"""
-                You are an Azure CLI expert. Translate the user's natural language query into the appropriate
-                Azure CLI command based on the available commands.
-                
-                Available commands:
-                {command_list}
-                
-                Instructions:
-                1. Carefully analyze the user's intent and identify the specific Azure resource type they're asking about
-                2. Match the resource type in the query to the corresponding command category (e.g., "resource groups" → "group")
-                3. Match the action in the query (list, show, create, delete, etc.) to the appropriate verb in the command
-                4. If the command needs parameters, add them based on the user's query
-                5. Respond with ONLY the command, no explanations or additional text
-                
-                Examples of common translations:
-                - "list all my X" → "X list" (not "subscription list")
-                - "show my X" → "X show" 
-                - "create a new X" → "X create"
-                - "delete X" → "X delete"
-                - "tell me about X" → "X show"
-                
-                Pay special attention to the specific resource type mentioned in the query and prioritize 
-                commands that directly match that resource type over generic commands.
-                
-                If you're unsure between multiple commands, choose the one that most specifically addresses 
-                the resource type mentioned in the query.
-                """
+    You are an Azure CLI expert. Translate the user's natural language query into the appropriate
+    Azure CLI command based on the available commands.
+    
+    Available commands:
+    {command_list}
+    
+    Instructions:
+    1. Carefully analyze the user's intent and identify the specific Azure resource type they're asking about
+    2. Match the resource type in the query to the corresponding command category (e.g., "resource groups" → "group")
+    3. Match the action in the query (list, show, create, delete, etc.) to the appropriate verb in the command
+    4. Include appropriate parameters based on the user's requirements
+    5. Respond with ONLY the command, no explanations or additional text
+    
+    Common Parameters:
+    - Output formatting: Use "-o table", "-o json", "-o tsv", "-o yaml" when users request specific formats
+    - Resource groups: Use "-g [name]" or "--resource-group [name]" when a specific resource group is mentioned
+    - Subscriptions: Use "--subscription [name/id]" when a specific subscription is mentioned
+    - Filtering: Use "--query" with JMESPath syntax when filtering is requested
+    
+    Examples of common translations:
+    - "list all my X" → "X list"
+    - "show my X" → "X show" 
+    - "create a new X" → "X create"
+    - "delete X" → "X delete"
+    - "tell me about X" → "X show"
+    - "list X in table format" → "X list -o table"
+    - "show X in resource group Y" → "X list -g Y"
+    - "list only running X" → "X list --query '[?powerState==\\'running\\']'"
+    
+    Pay special attention to the specific resource type mentioned in the query and prioritize 
+    commands that directly match that resource type over generic commands.
+    
+    If the user mentions format preferences (table, json, yaml), include the appropriate -o parameter.
+    
+    If you're unsure between multiple commands, choose the one that most specifically addresses 
+    the resource type mentioned in the query.
+    """
         
         try:
             logger.info(f"Calling Ollama to translate '{natural_language_query}'")
