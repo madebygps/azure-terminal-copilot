@@ -17,7 +17,7 @@ class MCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
         self.available_tools = []
-        self.available_prompts = []
+        
         
     async def cleanup(self):
         if self.exit_stack:
@@ -60,7 +60,7 @@ class MCPClient:
             logger.error(f"Failed to list tools: {str(e)}")
             print(f"Connected but couldn't retrieve tool list: {str(e)}")
 
-    async def send_command(self, command: str) -> Union[Dict[str, Any], List[Any], str]:
+    async def send_command(self, command: str, ollama_host: str, ollama_model: str) -> Union[Dict[str, Any], List[Any], str]:
         if not self.session:
             raise RuntimeError("Not connected to MCP server. Call connect_to_server first.")
                 
@@ -68,7 +68,7 @@ class MCPClient:
         print(f"Processing: {command}")
         
         try:
-            azure_command = await self.translate_to_azmcp_command(command)
+            azure_command = await self.translate_to_azmcp_command(command, ollama_host, ollama_model)
             if azure_command != command:
                 print(f"Translated to: {azure_command}")
             
@@ -105,9 +105,8 @@ class MCPClient:
             logger.error(f"Failed to execute command: {str(e)}")
             return {"error": f"Command execution failed: {str(e)}"}
             
-    async def translate_to_azmcp_command(self, natural_language_query: str) -> str:
-        ollama_host = os.getenv('OLLAMA_HOST')
-        ollama_model = os.getenv('OLLAMA_MODEL')
+    async def translate_to_azmcp_command(self, natural_language_query: str, ollama_host: str, ollama_model: str) -> str:
+      
         
         available_commands = []
     
@@ -118,25 +117,36 @@ class MCPClient:
             if hasattr(tool, 'name')
             ])
         
-        available_commands = list(set(available_commands))
-        command_list = "\n".join([f"- {cmd}" for cmd in available_commands])
-        print(command_list)
-        
-        system_prompt = f"""
-        You are an Azure CLI expert. Translate the user's natural language query into the appropriate
-        Azure CLI command based on the available commands.
-        
-        Available commands:
-        {command_list}
-        
-        Instructions:
-        1. Select the most appropriate command from the list above
-        2. If the command needs parameters, add them based on the user's query
-        3. Respond with ONLY the command, no explanations or additional text
-    
-        
-        If you're not sure, respond with the closest matching command from the available list.
-        """
+            available_commands = list(set(available_commands))
+            command_list = "\n".join([f"- {cmd}" for cmd in available_commands])
+                
+            system_prompt = f"""
+                You are an Azure CLI expert. Translate the user's natural language query into the appropriate
+                Azure CLI command based on the available commands.
+                
+                Available commands:
+                {command_list}
+                
+                Instructions:
+                1. Carefully analyze the user's intent and identify the specific Azure resource type they're asking about
+                2. Match the resource type in the query to the corresponding command category (e.g., "resource groups" → "group")
+                3. Match the action in the query (list, show, create, delete, etc.) to the appropriate verb in the command
+                4. If the command needs parameters, add them based on the user's query
+                5. Respond with ONLY the command, no explanations or additional text
+                
+                Examples of common translations:
+                - "list all my X" → "X list" (not "subscription list")
+                - "show my X" → "X show" 
+                - "create a new X" → "X create"
+                - "delete X" → "X delete"
+                - "tell me about X" → "X show"
+                
+                Pay special attention to the specific resource type mentioned in the query and prioritize 
+                commands that directly match that resource type over generic commands.
+                
+                If you're unsure between multiple commands, choose the one that most specifically addresses 
+                the resource type mentioned in the query.
+                """
         
         try:
             logger.info(f"Calling Ollama to translate '{natural_language_query}'")
@@ -171,7 +181,7 @@ async def main():
     load_dotenv()
     server_url = os.getenv('SERVER_URL')
     ollama_host = os.getenv('OLLAMA_HOST')
-    ollama_model = os.getenv('MODEL')
+    ollama_model = os.getenv('OLLAMA_MODEL')
     
     if not server_url:
         print("ERROR: SERVER_URL environment variable not set")
@@ -215,7 +225,7 @@ async def main():
             if not user_input.strip():
                 continue
                 
-            result = await client.send_command(user_input)
+            result = await client.send_command(user_input, ollama_host, ollama_model)
             
             logger.info(f"Raw result: {result}")
             
